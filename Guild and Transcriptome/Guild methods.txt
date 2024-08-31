@@ -1,0 +1,73 @@
+1. megahit for contigs
+megahit --12 xxx.fq -m 100000000000 -t 24 -o xxx --out-prefix xxx --min-contig-len 1500 &
+
+2. Metagenmark for gene
+MetaGeneMark_linux_64/mgm/gmhmmp -a -d -f G -m /home/database/MetaGeneMark_linux_64/mgm/MetaGeneMark_v1.mod B1.contigs.fa -o B1.gff
+
+3. Extract DNA sequence
+perl /mnt/Novadata/database/MetaGeneMark_linux_64/mgm/nt_from_gff.pl B1.gff > B1.nt.fa
+
+4. Combine the DNA sequence of all the samples
+cat *.nt.fa > all_unclean_DNA.fa
+
+5. elimination of redundancy
+cd-hit-v4.6.7-2017-0501/cd-hit-est -i all_unclean_DNA.fa -o all_clean.fa -c 0.95 -n 10 -M 32000 -aS 0.9 -T 8 -B 1 &
+
+6. build an index
+nohup bowtie2-build all_clean.fa all_clean.index &
+
+7. Sample abundance was obtained by comparison
+bowtie2 -p 20 -x all_clean.index -U B1.fa -S B1.sam
+
+samtools view -bS B1.sam -o B1.bam
+
+samtools sort -m 10000000000 B1.bam -o B1.out.bam
+
+samtools index B1.out.bam
+
+samtools idxstats B1.out.bam | tee -a B1.txt
+
+
+8. Clustering based on canopy algorithm
+cc.bin -n 16 -i ./all_simple_abundance.txt -o clusters_out -c profiles_out -p CAG_prefix --max_canopy_dist 0.1 --max_close_dist 0.4 --max_merge_dist 0.1 --min_step_dist 0.005 --max_num_canopy_walks 5 --stop_fraction 1 --canopy_size_stats_file progress_stat_file
+
+9. Annotate all cags
+gtdbtk classify_wf --genome_dir ./ --out_dir ./allcags_anotation/ --cpus 40 --extension fa --force &
+
+10. Clustering of all cags again based on ward algorithm in R software
+library(vegan)
+library(factoextra)
+library(fpc)
+setwd("C:/Users/zeng/Desktop/boospearman0223")
+
+#Read symmetric distance matrix (1-spearman correlation r-value)
+
+distance_matrix <- read.delim('distance_matrix.txt', row.names = 1, sep = '\t', stringsAsFactors = F, check.names = F)
+
+ward_clusters <- hclust(as.dist(distance_matrix), method = "ward.D2")
+
+
+# 绘制聚类结果的树状图
+plot(ward_clusters, main = "Ward.D2 Clustering Dendrogram", xlab = "", sub = "", ylab = "Height",cex=0.65)
+
+
+
+fviz_nbclust(distance_matrix, FUNcluster = hcut, method = "wss")
+fviz_nbclust(distance_matrix, FUNcluster = hcut, method = "gap_stat")
+fviz_nbclust(distance_matrix, FUNcluster = hcut, method = "silhouette")
+
+
+###############
+
+rect.hclust(ward_clusters, k = 9, border = 2:10)
+
+
+cluster_labels <- cutree(ward_clusters, k = 9)
+
+
+result_df <- data.frame(SampleID = rownames(distance_matrix), Cluster = cluster_labels)
+
+
+write.table(result_df, file = "cluster_results.txt", sep = "\t", quote = FALSE, row.names = FALSE)
+
+

@@ -1,0 +1,33 @@
+1. Comparison samples are based on a database
+/STAR/STAR-master/bin/Linux_x86_64/STAR --genomeDir /STAR/150index --runThreadN 20 --readFilesIn ./B1_1.clean.fq.gz ./B1_2.clean.fq.gz --sjdbGTFfile /STAR/mice100/gencode.vM26.annotation.gtf --readFilesCommand zcat --outFileNamePrefix B1 --outSAMtype BAM SortedByCoordinate --outBAMsortingThreadN 5 &
+
+
+2. Calculation of gene expression using FeatureCounts software
+/STAR/subread-2.0.6-Linux-x86_64/bin/featureCounts -T 40 -p -t exon -g gene_id -a /STAR/mice100/gencode.vM26.annotation.gtf -o allRNA.txt B1Aligned.sortedByCoord.out.bam B2Aligned.sortedByCoord.out.bam B3Aligned.sortedByCoord.out.bam
+
+
+
+3. Computing differentially expressed genes using the R DESeq2 package
+library(DESeq2)
+dat <- read.delim("allRNA.txt", row.names = 1, sep = '\t', check.names = FALSE)
+coldata <- data.frame(condition = factor(rep(c('control', 'treat'), each = 3), levels = c('control', 'treat')))
+
+dds <- DESeqDataSetFromMatrix(countData = dat, colData = coldata, design= ~condition) 
+
+dds1 <- DESeq(dds, fitType = 'mean', minReplicatesForReplace = 7, parallel = FALSE)
+
+res <- results(dds1, contrast = c('condition', 'treat', 'control'))
+res1 <- data.frame(res, stringsAsFactors = FALSE, check.names = FALSE)
+
+write.table(res1, 'control_treat.DESeq2.txt', col.names = NA, sep = '\t', quote = FALSE) 
+res1 <- res1[order(res1$padj, res1$log2FoldChange, decreasing = c(FALSE, TRUE)), ]
+res1[which(res1$log2FoldChange >= 2 & res1$padj < 0.05),'sig'] <- 'up'
+res1[which(res1$log2FoldChange <= -2 & res1$padj < 0.05),'sig'] <- 'down'
+res1[which(abs(res1$log2FoldChange) <= 2 | res1$padj >= 0.05),'sig'] <- 'none'
+res1_select <- subset(res1, sig %in% c('up', 'down'))
+write.table(res1_select, file = 'control_treat.DESeq2.select.txt', sep = '\t', col.names = NA, quote = FALSE)
+res1_up <- subset(res1, sig == 'up')
+res1_down <- subset(res1, sig == 'down')
+write.table(res1_up, file = 'control_treat.DESeq2.up.txt', sep = '\t', col.names = NA, quote = FALSE)
+write.table(res1_down, file = 'control_treat.DESeq2.down.txt', sep = '\t', col.names = NA, quote = FALSE)
+

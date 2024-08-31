@@ -1,0 +1,18 @@
+library(dplyr)
+library(data.table)
+gene_exp_count <- fread("allRNA.txt",data.table = F)
+use_data <- gene_exp_count[,-c(2:5)]
+fpkm_value <- use_data
+for (i in 3:ncol(use_data)) {
+  result <- round((use_data[,i]*1000*1000000)/(use_data[,2]*as.numeric(sum(use_data[,i]))),3)
+  fpkm_value[,i] <- result
+}
+write.table(fpkm_value, file = "fpkm_results.txt", sep = "\t", quote = FALSE, row.names = FALSE)
+
+tpm_value <- use_data
+for (i in 3:ncol(use_data)) {
+  result <- round((use_data[,i]*1000*1000000)/(use_data[,2]*sum((use_data[,i]*1000/use_data[,2]))),3)
+  tpm_value[,i] <- result
+}
+
+write.table(tpm_value, file = "tpm_results.txt", sep = "\t", quote = FALSE, row.names = FALSE)
